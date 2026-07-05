@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Salinity Ingress Advisor — Gujarat Coastal Farmland Protection</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ TOP NAV ═══════════════════════════════════════ -->
+<header class="top-nav">
+  <div class="nav-brand">
+    <div class="brand-icon">🌊</div>
+    <div class="brand-text">
+      <span class="brand-title">Smart Salinity Advisor</span>
+      <span class="brand-sub">Gujarat Coastal Farmland Protection · IBM watsonx.ai</span>
+    </div>
+  </div>
+  <nav class="nav-links">
+    <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+    <button class="nav-btn" data-view="assessment">Field Assessment</button>
+    <button class="nav-btn" data-view="crops">Crop Guide</button>
+    <button class="nav-btn" data-view="reclamation">Reclamation</button>
+    <button class="nav-btn" data-view="irrigation">Irrigation</button>
+    <button class="nav-btn" data-view="chat">AI Advisor</button>
+  </nav>
+  <div class="status-indicator">
+    <span class="status-dot" id="wsStatus"></span>
+    <span class="status-label" id="wsLabel">Connecting...</span>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════ ALERT BANNER ═══════════════════════════════════════ -->
+<div id="alertBanner" class="alert-banner hidden"></div>
+
+<!-- ═══════════════════════════════════════ VIEWS ═══════════════════════════════════════ -->
+<main class="main-content">
+
+  <!-- ─── DASHBOARD VIEW ─── -->
+  <section id="view-dashboard" class="view active">
+    <div class="view-header">
+      <h1>Salinity Monitoring Dashboard</h1>
+      <p class="view-subtitle">Real-time soil and groundwater EC readings across Gujarat coastal districts</p>
+      <div class="district-tabs">
+        <button class="district-tab active" data-district="kutch">Kutch</button>
+        <button class="district-tab" data-district="jamnagar">Jamnagar</button>
+        <button class="district-tab" data-district="bhavnagar">Bhavnagar</button>
+        <button class="btn-sm btn-refresh" id="refreshBtn">↺ Refresh</button>
+      </div>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card" id="kpi-soil-ec">
+        <div class="kpi-icon">🌱</div>
+        <div class="kpi-value" id="soilEC">—</div>
+        <div class="kpi-label">Soil EC (dS/m)</div>
+        <div class="kpi-sub" id="soilECsub">Surface 0-30cm</div>
+      </div>
+      <div class="kpi-card" id="kpi-gw-ec">
+        <div class="kpi-icon">💧</div>
+        <div class="kpi-value" id="gwEC">—</div>
+        <div class="kpi-label">Groundwater EC (dS/m)</div>
+        <div class="kpi-sub" id="gwECsub">Depth monitoring</div>
+      </div>
+      <div class="kpi-card" id="kpi-ph">
+        <div class="kpi-icon">⚗️</div>
+        <div class="kpi-value" id="soilPH">—</div>
+        <div class="kpi-label">Soil pH</div>
+        <div class="kpi-sub" id="soilPHsub">Optimal: 6.5–7.5</div>
+      </div>
+      <div class="kpi-card" id="kpi-sar">
+        <div class="kpi-icon">🧪</div>
+        <div class="kpi-value" id="soilSAR">—</div>
+        <div class="kpi-label">SAR Index</div>
+        <div class="kpi-sub" id="soilSARsub">Sodium Adsorption Ratio</div>
+      </div>
+      <div class="kpi-card alert-card" id="kpi-alert">
+        <div class="kpi-icon">⚠️</div>
+        <div class="kpi-value alert-value" id="alertLevel">—</div>
+        <div class="kpi-label">Alert Level</div>
+        <div class="kpi-sub" id="alertLevelSub">Tidal ingress risk</div>
+      </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="charts-grid">
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>30-Day Soil EC Trend</h3>
+          <span class="chart-legend">
+            <span class="legend-dot soil-ec-color"></span> Soil EC &nbsp;
+            <span class="legend-dot gw-ec-color"></span> GW EC
+          </span>
+        </div>
+        <canvas id="trendChart" height="200"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <h3>Salinity Classification</h3>
+          <span class="chart-legend">Current distribution</span>
+        </div>
+        <canvas id="classChart" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- Districts Overview Map + Table -->
+    <div class="districts-grid">
+      <div class="district-overview-card">
+        <h3>District Risk Overview</h3>
+        <div id="districtMapSvg" class="gujarat-map-container"></div>
+      </div>
+      <div class="district-table-card">
+        <h3>All Districts — Current Readings</h3>
+        <table class="data-table" id="allDistrictsTable">
+          <thead>
+            <tr>
+              <th>District</th>
+              <th>Soil EC</th>
+              <th>GW EC</th>
+              <th>pH</th>
+              <th>SAR</th>
+              <th>Alert</th>
+            </tr>
+          </thead>
+          <tbody id="allDistrictsBody">
+            <tr><td colspan="6" class="loading-row">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── FIELD ASSESSMENT VIEW ─── -->
+  <section id="view-assessment" class="view">
+    <div class="view-header">
+      <h1>Field Assessment</h1>
+      <p class="view-subtitle">Submit your field details for a personalized AI salinity analysis</p>
+    </div>
+    <div class="form-layout">
+      <div class="form-card">
+        <h3>Field Details</h3>
+        <form id="assessmentForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>District *</label>
+              <select id="fa-district" required>
+                <option value="">Select District</option>
+                <option value="kutch">Kutch</option>
+                <option value="jamnagar">Jamnagar</option>
+                <option value="bhavnagar">Bhavnagar</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Taluka / Village</label>
+              <input type="text" id="fa-taluka" placeholder="e.g. Mandvi" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Field Area (hectares) *</label>
+              <input type="number" id="fa-area" min="0.1" step="0.1" placeholder="e.g. 2.5" required />
+            </div>
+            <div class="form-group">
+              <label>Soil EC (dS/m) — if known</label>
+              <input type="number" id="fa-ec" min="0" step="0.1" placeholder="e.g. 8.5" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Current Crop (if any)</label>
+              <input type="text" id="fa-crop" placeholder="e.g. Cotton, Groundnut" />
+            </div>
+            <div class="form-group">
+              <label>Water Source</label>
+              <select id="fa-water">
+                <option value="canal">Narmada Canal</option>
+                <option value="borewell">Borewell / Groundwater</option>
+                <option value="mixed">Mixed Sources</option>
+                <option value="rainwater">Rainwater Harvesting</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Issue Description</label>
+            <textarea id="fa-description" rows="3" placeholder="Describe the problem you are facing (e.g. white salt crust on soil, yellowing leaves, reduced yield)..."></textarea>
+          </div>
+          <button type="submit" class="btn-primary" id="assessBtn">
+            <span>🤖 Get AI Assessment</span>
+          </button>
+        </form>
+      </div>
+      <div class="result-card" id="assessmentResult">
+        <div class="result-placeholder">
+          <div class="placeholder-icon">🌾</div>
+          <p>Fill in the form and click "Get AI Assessment" to receive personalized recommendations from our multi-agent AI system.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── CROP GUIDE VIEW ─── -->
+  <section id="view-crops" class="view">
+    <div class="view-header">
+      <h1>Salt-Tolerant Crop Guide</h1>
+      <p class="view-subtitle">Discover suitable crops for your salinity conditions</p>
+    </div>
+    <div class="crop-controls">
+      <div class="ec-slider-group">
+        <label>Soil EC Level: <strong id="ecSliderValue">6.0</strong> dS/m</label>
+        <input type="range" id="ecSlider" min="1" max="20" step="0.5" value="6" class="ec-slider" />
+        <div class="ec-scale">
+          <span class="ec-safe">Safe (0-2)</span>
+          <span class="ec-moderate">Moderate (4-8)</span>
+          <span class="ec-high">High (8-16)</span>
+          <span class="ec-extreme">Extreme (16+)</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>District</label>
+        <select id="cropDistrict">
+          <option value="kutch">Kutch</option>
+          <option value="jamnagar">Jamnagar</option>
+          <option value="bhavnagar">Bhavnagar</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="getCropRecommBtn">Get AI Recommendations</button>
+    </div>
+    <div id="cropGrid" class="crop-grid">
+      <!-- Populated by JS -->
+    </div>
+    <div id="cropAIResult" class="ai-result-box hidden"></div>
+  </section>
+
+  <!-- ─── RECLAMATION VIEW ─── -->
+  <section id="view-reclamation" class="view">
+    <div class="view-header">
+      <h1>Land Reclamation Planner</h1>
+      <p class="view-subtitle">Step-by-step soil restoration plan for saline-affected farmland</p>
+    </div>
+    <div class="form-layout">
+      <div class="form-card">
+        <h3>Reclamation Parameters</h3>
+        <form id="reclamationForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>District *</label>
+              <select id="rec-district" required>
+                <option value="kutch">Kutch</option>
+                <option value="jamnagar">Jamnagar</option>
+                <option value="bhavnagar">Bhavnagar</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Field Area (hectares) *</label>
+              <input type="number" id="rec-area" min="0.1" step="0.5" value="1" required />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Current Soil EC (dS/m) *</label>
+            <input type="number" id="rec-ec" min="4" max="40" step="0.5" value="10" required />
+            <small>Must be above 4 dS/m to need reclamation treatment</small>
+          </div>
+          <div class="amendment-preview" id="amendmentPreview">
+            <!-- Updated live -->
+          </div>
+          <button type="submit" class="btn-primary">Generate Reclamation Plan</button>
+        </form>
+      </div>
+      <div class="result-card" id="reclamationResult">
+        <div class="result-placeholder">
+          <div class="placeholder-icon">🌿</div>
+          <p>Enter your field parameters to generate a detailed phased reclamation plan with material requirements and costs.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── IRRIGATION VIEW ─── -->
+  <section id="view-irrigation" class="view">
+    <div class="view-header">
+      <h1>Irrigation Advisory</h1>
+      <p class="view-subtitle">Optimal irrigation scheduling for saline water conditions</p>
+    </div>
+    <div class="form-layout">
+      <div class="form-card">
+        <h3>Irrigation Parameters</h3>
+        <form id="irrigationForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Crop *</label>
+              <select id="irr-crop" required>
+                <option value="Cotton">Cotton (Kapas)</option>
+                <option value="Wheat">Wheat (Ghau)</option>
+                <option value="Barley">Barley (Jau)</option>
+                <option value="Groundnut">Groundnut (Mungfali)</option>
+                <option value="Sorghum">Sorghum (Jowar)</option>
+                <option value="Date Palm">Date Palm (Khajur)</option>
+                <option value="Beetroot">Beetroot (Chukandar)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>District *</label>
+              <select id="irr-district" required>
+                <option value="kutch">Kutch</option>
+                <option value="jamnagar">Jamnagar</option>
+                <option value="bhavnagar">Bhavnagar</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Irrigation Water EC (dS/m)</label>
+            <input type="number" id="irr-ec" min="0.1" max="20" step="0.1" value="3.5" />
+            <div class="water-quality-indicator" id="waterQualityIndicator"></div>
+          </div>
+          <button type="submit" class="btn-primary">Generate Irrigation Schedule</button>
+        </form>
+      </div>
+      <div class="result-card" id="irrigationResult">
+        <div class="result-placeholder">
+          <div class="placeholder-icon">💦</div>
+          <p>Configure your irrigation parameters to receive a customized weekly schedule with leaching requirements.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── AI CHAT VIEW ─── -->
+  <section id="view-chat" class="view">
+    <div class="view-header">
+      <h1>AI Advisor Chat</h1>
+      <p class="view-subtitle">Ask anything about salinity, crops, reclamation, or irrigation in your language</p>
+    </div>
+    <div class="chat-layout">
+      <div class="chat-sidebar">
+        <h3>Multi-Agent System</h3>
+        <div class="agent-cards">
+          <div class="agent-card orchestrator">
+            <div class="agent-icon">🎯</div>
+            <div class="agent-info">
+              <div class="agent-name">Orchestrator</div>
+              <div class="agent-desc">Routes &amp; Coordinates</div>
+            </div>
+            <div class="agent-status" id="agentOrchestrator">Ready</div>
+          </div>
+          <div class="agent-card">
+            <div class="agent-icon">📊</div>
+            <div class="agent-info">
+              <div class="agent-name">Salinity Monitor</div>
+              <div class="agent-desc">EC / pH Analysis</div>
+            </div>
+            <div class="agent-status" id="agentSalinity">Idle</div>
+          </div>
+          <div class="agent-card">
+            <div class="agent-icon">🌾</div>
+            <div class="agent-info">
+              <div class="agent-name">Crop Advisor</div>
+              <div class="agent-desc">Variety Selection</div>
+            </div>
+            <div class="agent-status" id="agentCrop">Idle</div>
+          </div>
+          <div class="agent-card">
+            <div class="agent-icon">🌿</div>
+            <div class="agent-info">
+              <div class="agent-name">Reclamation</div>
+              <div class="agent-desc">Soil Restoration</div>
+            </div>
+            <div class="agent-status" id="agentReclam">Idle</div>
+          </div>
+          <div class="agent-card">
+            <div class="agent-icon">💧</div>
+            <div class="agent-info">
+              <div class="agent-name">Irrigation</div>
+              <div class="agent-desc">Water Management</div>
+            </div>
+            <div class="agent-status" id="agentIrr">Idle</div>
+          </div>
+        </div>
+
+        <div class="sample-queries">
+          <h4>Sample Questions</h4>
+          <button class="sample-btn" data-query="What is the current salinity level in Kutch and is it safe for cotton farming?">
+            Kutch cotton salinity check
+          </button>
+          <button class="sample-btn" data-query="My soil EC in Jamnagar is 9 dS/m. What crops can I grow and how do I reclaim the land?">
+            EC 9 dS/m Jamnagar advice
+          </button>
+          <button class="sample-btn" data-query="How do I create an irrigation schedule for wheat in Bhavnagar when my borewell water EC is 5 dS/m?">
+            Wheat irrigation Bhavnagar
+          </button>
+          <button class="sample-btn" data-query="What is the 30 day salinity trend for all Gujarat coastal districts?">
+            30-day trend all districts
+          </button>
+          <button class="sample-btn" data-query="How much gypsum do I need for 3 hectares with EC of 12 dS/m in Kutch?">
+            Gypsum calculation 3ha
+          </button>
+        </div>
+      </div>
+
+      <div class="chat-main">
+        <div class="chat-messages" id="chatMessages">
+          <div class="chat-message system-message">
+            <div class="message-avatar">🌊</div>
+            <div class="message-content">
+              <strong>Smart Salinity Advisor</strong>
+              <p>Kem Cho! I am your AI advisor for Gujarat coastal farmland protection. I work with 4 specialist agents powered by IBM watsonx.ai to help you with:</p>
+              <ul>
+                <li>📊 Real-time salinity monitoring for Kutch, Jamnagar &amp; Bhavnagar</li>
+                <li>🌾 Salt-tolerant crop recommendations for your soil conditions</li>
+                <li>🌿 Land reclamation and soil restoration guidance</li>
+                <li>💧 Irrigation scheduling for saline water conditions</li>
+              </ul>
+              <p>Ask me anything in English or Gujarati!</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="chat-input-area">
+          <div class="agent-activity" id="agentActivity" style="display:none;">
+            <div class="thinking-dots"><span></span><span></span><span></span></div>
+            <span id="agentActivityText">Processing your query...</span>
+          </div>
+          <div class="chat-input-row">
+            <textarea id="chatInput" placeholder="Ask about salinity, crops, reclamation, irrigation... (Press Enter to send)" rows="2"></textarea>
+            <button id="chatSendBtn" class="chat-send-btn">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Scripts -->
+<script src="js/app.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/chatbot.js"></script>
+
+</body>
+</html>
